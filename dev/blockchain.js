@@ -7,7 +7,7 @@ const writter = fs.createWriteStream('chain.txt', {
 });
 
 var alreadyBlockMined = false;
-const zerosString = '000000';
+const zerosString = '0000';
 const numberOfZeros = zerosString.length;
 
 function Blockchain() {
@@ -33,6 +33,7 @@ function Blockchain() {
 
 Blockchain.prototype.addBlock = function(block) {
 	this.chain.push(block);
+	console.log(this.chain)
 }
 
 Blockchain.prototype.createNewBlock = function (nonce, previousBlockHash, hash, pendingTransactionsMined) {
@@ -84,8 +85,10 @@ Blockchain.prototype.createNewTransactionMoney = function (amount, sender, recip
 };
 
 Blockchain.prototype.addTransactionToPendingTransactions = function (transactionObj) {
+	console.log(transactionObj);
 	this.pendingTransactions.push(transactionObj);
-	return this.getLastBlock['index'] + 1;
+	console.log(this)
+	return this.getLastBlock()['index'] + 1;
 };
 
 Blockchain.prototype.hashBlock = function (previousBlockHash, currentBlockData, nonce) {
@@ -126,8 +129,7 @@ Blockchain.prototype.chainIsValid = function (blockchain) {
             validChain = false;
             break;
         }
-    }
-    ;
+    };
 
     const genesisBlock = blockchain[0];
     const correctNonce = genesisBlock['nonce'] === 100;
@@ -235,6 +237,7 @@ Blockchain.prototype.isPasswordValid = function(carId,password) {
     };
     return passwordValid;
 };
+
 Blockchain.prototype.setAlreadyBlockMined = function () {
 	alreadyBlockMined = true;
 };

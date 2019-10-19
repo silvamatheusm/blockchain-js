@@ -6,11 +6,11 @@ const uuid = require('uuid/v1');
 const port = process.argv[2];
 const rp = require('request-promise');
 const cors = require('cors')
-const zerosString = '000000';
+const zerosString = '0000';
 const numberOfZeros = zerosString.length;
 const nodeAddress = uuid().split('-').join('');
 
-const carChain = new Blockchain();
+const medicalChain = new Blockchain();
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended: false}))
@@ -18,22 +18,22 @@ app.use(cors())
 
 
 app.get('/blockchain', function (req, res) {
-	res.send(carChain);
+	res.send(medicalChain);
 });
 
 
 app.post('/transaction', function (req, res) {
 	const newTransaction = req.body.newTransaction;
-	const blockIndex = carChain.addTransactionToPendingTransactions(newTransaction);
+	const blockIndex = medicalChain.addTransactionToPendingTransactions(newTransaction);
 	res.json({note: `Transaction will be added in block ${blockIndex}.`});
 });
 
 app.post('/transactionMoney/broadcast', function (req, res) {
-	const newTransaction = carChain.createNewTransactionMoney(req.body.amount, req.body.sender, req.body.recipient);
-	carChain.addTransactionToPendingTransactions(newTransaction);
+	const newTransaction = medicalChain.createNewTransactionMoney(req.body.amount, req.body.sender, req.body.recipient);
+	medicalChain.addTransactionToPendingTransactions(newTransaction);
 
 	const requestPromises = [];
-	carChain.networkNodes.forEach(networkNodeUrl => {
+	medicalChain.networkNodes.forEach(networkNodeUrl => {
 		const requestOptions = {
 			uri: networkNodeUrl + "/transaction",
 			method: 'POST',
@@ -53,14 +53,14 @@ app.post('/transactionMoney/broadcast', function (req, res) {
 app.post('/transaction/broadcast', (req, res) => {
 	const password = req.body.password;
 	const carId = req.body.carId;
-	if(!carChain.isPasswordValid(carId, password)){
+	if(!medicalChain.isPasswordValid(carId, password)){
 		res.json({ note: 'Password incorrect' });
 	} else {
-		const newTransaction = carChain.createNewTransaction(req.body.meter, req.body.carId, password);
-		carChain.addTransactionToPendingTransactions(newTransaction);
+		const newTransaction = medicalChain.createNewTransaction(req.body.meter, req.body.carId, password);
+		medicalChain.addTransactionToPendingTransactions(newTransaction);
 
 		const requestPromises = [];
-		carChain.networkNodes.forEach(networkNodeUrl =>{
+		medicalChain.networkNodes.forEach(networkNodeUrl =>{
 			const requestOptions = {
 				uri: networkNodeUrl + "/transaction",
 				method: 'POST',
@@ -80,16 +80,16 @@ app.post('/transaction/broadcast', (req, res) => {
 
 app.get('/mine', function (req, res) {
 	console.log("mine chamado");
-	const lastBlock = carChain.getLastBlock();
+	const lastBlock = medicalChain.getLastBlock();
 	const previousBlockHash = lastBlock['hash'];
 	const currentBlockData = {
-        transactions: carChain.pendingTransactions.slice(),//passando por copia
+        transactions: medicalChain.pendingTransactions.slice(),//passando por copia
         index: lastBlock['index'] + 1
     };
-    const nonce = carChain.proofOfWork(previousBlockHash, currentBlockData);
+    const nonce = medicalChain.proofOfWork(previousBlockHash, currentBlockData);
     if(nonce == -1) {
     	const requestOptions = {
-    		uri: carChain.currentNodeUrl + '/consensus',
+    		uri: medicalChain.currentNodeUrl + '/consensus',
     		method: 'GET',
     		json: true
     	}
@@ -97,11 +97,11 @@ app.get('/mine', function (req, res) {
     	rp(requestOptions);
     }
     else {
-    	const blockHash = carChain.hashBlock(previousBlockHash, currentBlockData, nonce);
-    	const newBlock = carChain.createNewBlock(nonce, previousBlockHash, blockHash, currentBlockData['transactions']);
+    	const blockHash = medicalChain.hashBlock(previousBlockHash, currentBlockData, nonce);
+    	const newBlock = medicalChain.createNewBlock(nonce, previousBlockHash, blockHash, currentBlockData['transactions']);
 
     	const requestPromises = [];
-    	carChain.networkNodes.forEach(networkNodeUrl => {
+    	medicalChain.networkNodes.forEach(networkNodeUrl => {
     		const requestOptions = {
     			uri: networkNodeUrl + "/receive-new-block",
     			method: "POST",
@@ -113,7 +113,7 @@ app.get('/mine', function (req, res) {
     	Promise.all(requestPromises)
     	.then(data => {
     		const requestOptions = {
-    			uri: carChain.currentNodeUrl + '/transactionMoney/broadcast',
+    			uri: medicalChain.currentNodeUrl + '/transactionMoney/broadcast',
     			method: "POST",
     			body: {
     				amount: 12.5,
@@ -135,10 +135,10 @@ app.get('/mine', function (req, res) {
 
 app.post("/receive-new-block", function (req, res) {
 	const newBlock = req.body.newBlock;
-	const lastBlock = carChain.getLastBlock();
+	const lastBlock = medicalChain.getLastBlock();
 	const correctHash = lastBlock.hash === newBlock.previousBlockHash;
 	const correctIndex = lastBlock['index'] + 1 === newBlock['index'];
-	const blockHash = carChain.hashBlock(lastBlock['hash'], {
+	const blockHash = medicalChain.hashBlock(lastBlock['hash'], {
 		transactions: newBlock['transactions'],
 		index: newBlock['index']
 	}, newBlock['nonce']);
@@ -146,9 +146,9 @@ app.post("/receive-new-block", function (req, res) {
 
 	if (correctIndex && correctHash && correctNonce){
 		console.log('setando already block mined');
-		carChain.setAlreadyBlockMined();
-		carChain.chain.push(newBlock);
-		carChain.removeMinedTransactions(newBlock['transactions']);
+		medicalChain.setAlreadyBlockMined();
+		medicalChain.chain.push(newBlock);
+		medicalChain.removeMinedTransactions(newBlock['transactions']);
 		res.json({
 			note: 'New block received and accepted.',
 			newBlock: newBlock
@@ -167,11 +167,11 @@ app.post("/receive-new-block", function (req, res) {
 // fazendo com que todos os nós adicionem o novo nó. Depois disso, adiciona todos os nós para o novo nó inserido, através do register-nodes-bulk
 app.post('/register-and-broadcast-node', function (req, res) {
 	const newNodeUrl = req.body.newNodeUrl;
-	if (carChain.networkNodes.indexOf(newNodeUrl) == -1)
-		carChain.networkNodes.push(newNodeUrl);
+	if (medicalChain.networkNodes.indexOf(newNodeUrl) == -1)
+		medicalChain.networkNodes.push(newNodeUrl);
 
 	const regNodesPromises = [];
-	carChain.networkNodes.forEach(networkNodeUrl => {
+	medicalChain.networkNodes.forEach(networkNodeUrl => {
 		const requestOptions = {
 			uri: networkNodeUrl + '/register-node',
 			method: 'POST',
@@ -188,7 +188,7 @@ app.post('/register-and-broadcast-node', function (req, res) {
 		const bulkRegisterOptions = {
 			uri: newNodeUrl + "/register-nodes-bulk",
 			method: 'POST',
-			body: {allNetworkNodes: [...carChain.networkNodes, carChain.currentNodeUrl]},
+			body: {allNetworkNodes: [...medicalChain.networkNodes, medicalChain.currentNodeUrl]},
 			json: true
 		};
 		return rp(bulkRegisterOptions);
@@ -202,11 +202,11 @@ app.post('/register-and-broadcast-node', function (req, res) {
 // register a node with the network
 app.post('/register-node', function (req, res) {
 	const newNodeUrl = req.body.newNodeUrl;
-	const nodeNotAlreadyPresent = carChain.networkNodes.indexOf(newNodeUrl) == -1;
-	const notCurrentNode = carChain.currentNodeUrl != newNodeUrl;
+	const nodeNotAlreadyPresent = medicalChain.networkNodes.indexOf(newNodeUrl) == -1;
+	const notCurrentNode = medicalChain.currentNodeUrl != newNodeUrl;
 
 	if (nodeNotAlreadyPresent && notCurrentNode)
-		carChain.networkNodes.push(newNodeUrl);
+		medicalChain.networkNodes.push(newNodeUrl);
 	res.json({node: 'New node registered successfully.'});
 });
 
@@ -214,13 +214,13 @@ app.post('/register-node', function (req, res) {
 app.post('/register-nodes-bulk', function (req, res) {
 	const allNetworkNodes = req.body.allNetworkNodes;
 	allNetworkNodes.forEach(networkNodeUrl => {
-		const nodeNotAlreadyPresent = carChain.networkNodes.indexOf(networkNodeUrl) == -1;
-		const notCurrentNode = carChain.currentNodeUrl != networkNodeUrl;
+		const nodeNotAlreadyPresent = medicalChain.networkNodes.indexOf(networkNodeUrl) == -1;
+		const notCurrentNode = medicalChain.currentNodeUrl != networkNodeUrl;
 		if (nodeNotAlreadyPresent && notCurrentNode)
-			carChain.networkNodes.push(networkNodeUrl);
+			medicalChain.networkNodes.push(networkNodeUrl);
 	});
 	const consensusRequest = {
-		uri: carChain.currentNodeUrl + "/consensus",
+		uri: medicalChain.currentNodeUrl + "/consensus",
 		method: 'GET',
 		json: true
 	};
@@ -231,7 +231,7 @@ app.post('/register-nodes-bulk', function (req, res) {
 
 app.get('/consensus', function (req, res) {
 	const requestPromises = [];
-	carChain.networkNodes.forEach(networkNodeUrl => {
+	medicalChain.networkNodes.forEach(networkNodeUrl => {
 		const requestOptions = {
 			uri: networkNodeUrl + '/blockchain',
 			method: 'GET',
@@ -242,7 +242,7 @@ app.get('/consensus', function (req, res) {
 
 	Promise.all(requestPromises)
 	.then(blockchains => {
-		const currentChainLength = carChain.chain.length;
+		const currentChainLength = medicalChain.chain.length;
 		let maxChainLength = currentChainLength;
 		let newLongestChain = null;
 		let newPendingTransactions = null;
@@ -255,17 +255,17 @@ app.get('/consensus', function (req, res) {
 			}
 		});
 
-		if (!newLongestChain || (newLongestChain && !carChain.chainIsValid(newLongestChain))) {
+		if (!newLongestChain || (newLongestChain && !medicalChain.chainIsValid(newLongestChain))) {
 			res.json({
 				note: 'Current chain has not been replaced',
-				chain: carChain.chain
+				chain: medicalChain.chain
 			});
-		} else if (newLongestChain && carChain.chainIsValid(newLongestChain)) {
-			carChain.chain = newLongestChain;
-			carChain.pendingTransactions = newPendingTransactions;
+		} else if (newLongestChain && medicalChain.chainIsValid(newLongestChain)) {
+			medicalChain.chain = newLongestChain;
+			medicalChain.pendingTransactions = newPendingTransactions;
 			res.json({
 				note: 'This chain has been replaced',
-				chain: carChain.chain
+				chain: medicalChain.chain
 			});
 		}
 	});
@@ -273,7 +273,7 @@ app.get('/consensus', function (req, res) {
 
 app.get('/block/:blockHash', (req, res) => { //localhost:3001/block/asdowidonaioda
 	const blockHash = req.params.blockHash;
-	const correctBlock = carChain.getBlock(blockHash);
+	const correctBlock = medicalChain.getBlock(blockHash);
 	res.json({
 		block: correctBlock
 	});
@@ -281,7 +281,7 @@ app.get('/block/:blockHash', (req, res) => { //localhost:3001/block/asdowidonaio
 
 app.get('/transaction/:transactionId', (req, res) => {
 	const transactionId = req.params.transactionId;
-	const transactionData = carChain.getTransaction(transactionId);
+	const transactionData = medicalChain.getTransaction(transactionId);
 	res.json({
 		transaction: transactionData.transaction,
 		block: transactionData.block
@@ -290,7 +290,7 @@ app.get('/transaction/:transactionId', (req, res) => {
 
 app.get('/address/:address', (req, res) => {
 	const address = req.params.address;
-	const addressData = carChain.getAddressData(address);
+	const addressData = medicalChain.getAddressData(address);
 	res.json({
 		addressData: addressData
 	});
@@ -298,7 +298,7 @@ app.get('/address/:address', (req, res) => {
 
 app.get('/carId/:carId', (req, res) => {
 	const carId = req.params.carId;
-	const carIdData = carChain.getDataByCarId(carId);
+	const carIdData = medicalChain.getDataByCarId(carId);
 	res.json({
 		carIdData: carIdData
 	});
@@ -312,7 +312,7 @@ app.get('/block-explorer', (req, res) => {
 app.get('/mineAll', (req,res) => {
 	console.log('mineAll');
 	const requestPromises = [];
-	carChain.networkNodes.forEach(networkNodeUrl => {
+	medicalChain.networkNodes.forEach(networkNodeUrl => {
 		const requestOptions = {
 			uri: networkNodeUrl + '/mine',
 			method: 'GET',
@@ -321,7 +321,7 @@ app.get('/mineAll', (req,res) => {
 		requestPromises.push(rp(requestOptions));
 	});
 	const requestOptions = {
-		uri: carChain.currentNodeUrl + '/mine',
+		uri: medicalChain.currentNodeUrl + '/mine',
 		method: 'GET',
 		json: true
 	};
@@ -335,7 +335,7 @@ app.get('/mineAll', (req,res) => {
 function verify(){
 	const requests = [];
 	const nodesOk = [];
-	carChain.networkNodes.forEach(networkNodeUrl => {
+	medicalChain.networkNodes.forEach(networkNodeUrl => {
 		const requestOptions = {
 			uri: networkNodeUrl + '/nodeOn',
 			method: 'POST',
@@ -352,13 +352,13 @@ function verify(){
 	});
 	Promise.all(requests)
 	.then(() => {
-		carChain.networkNodes = nodesOk;
+		medicalChain.networkNodes = nodesOk;
 		console.log(nodesOk);
 	})
 }
 
 app.post('/nodeOn', (req,res) => {
-	res.json({url: carChain.currentNodeUrl})
+	res.json({url: medicalChain.currentNodeUrl})
 });
 
 app.listen(port, function () {
